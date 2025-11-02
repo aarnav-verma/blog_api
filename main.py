@@ -75,8 +75,7 @@ def load_items(req: GenerateRequest) -> List[Dict[str, Any]]:
 
 @app.post("/generate-blogs")
 def generate_blogs(req: GenerateRequest):
-    items = load_items_from_request(req)
-
+    items = load_items(req)
     saved_files: List[str] = []
     updated: List[Dict[str, Any]] = []
 
