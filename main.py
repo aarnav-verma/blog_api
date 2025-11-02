@@ -73,28 +73,34 @@ def load_items(req: GenerateRequest) -> List[Dict[str, Any]]:
         return parsed
     raise HTTPException(400, "Provide `data` (parsed) or `data_json` (string).")
 
-@app.post("/generate-blogs", response_model=GenerateResponse)
-def generate_blogs(req: GenerateRequest) -> GenerateResponse:
-    items = load_items(req)
+@app.post("/generate-blogs")
+def generate_blogs(req: GenerateRequest):
+    items = load_items_from_request(req)
+
     saved_files: List[str] = []
     updated: List[Dict[str, Any]] = []
 
     for row in items:
         if str(row.get("status", "")).lower() != "idea":
-            updated.append(row); continue
-        title = row.get("title") or f"Post {row.get('row_number','')}"
+            updated.append(row)
+            continue
+
+        title = row.get("title") or f"Post {row.get('row_number', '')}"
         try:
             research = deep_research(row)
             draft = write_blog(title, research)
             post = editing(draft)
+
             row.update({"research": research, "draft": draft, "post": post, "status": "completed"})
-            if req.save_files:
-                saved_files.append(save_post(title, post, req.output_dir))
+            updated.append(row)
         except Exception as e:
-            logging.exception("Failed: %s", title)
+            logger.exception("Failed: %s", title)
             row.update({"status": "error", "error": str(e)})
-        updated.append(row)
-    return GenerateResponse(updated_items=updated, saved_files=saved_files)
+            updated.append(row)
+
+    # Return plain JSON mapping title -> blog content
+    blog_map = {row["title"]: row["post"] for row in updated if row.get("status") == "completed"}
+    return blog_map
 
 @app.get("/healthz")
 def health(): return {"status": "ok"}
@@ -102,4 +108,3 @@ def health(): return {"status": "ok"}
 if __name__ == "__main__":
     import uvicorn, os
     uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", "10000")), reload=True)
-
